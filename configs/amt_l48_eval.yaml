@@ -1,0 +1,85 @@
+# AMT L=48 evaluation configuration for MFT25 Val fixed detections.
+model:
+  name: fishmamba_temporal
+  checkpoint: checkpoints/amt_l48/reid_best.pt
+  temporal_length: 48
+  frame_stride: 1
+  input_size: [128, 256]
+  crop_pad: 0.10
+  backbone: ResNet-18
+  temporal_encoder: Mamba
+  mamba_layers: 2
+  mamba_d_model: 256
+  embedding_dim: 256
+  pool_mode: mean_last
+
+dataset:
+  data_root: data/MFT25-train
+  split: val_half
+  sequences: [BT-001, BT-003, BT-005, MSK-002, PF-001, SN-001, SN-013, SN-015]
+  gt_rel: gt/gt_val_half.txt
+  full_gt_rel: gt/gt.txt
+  det_rel: det/det_yolox_ckpt.txt
+  detection_protocol: official_fixed_detections
+
+evaluation:
+  axis_mode: none
+  w_min: null
+  temporal_eval_mode: history
+  history_min_depth: 1
+  history_short_fallback: none
+  history_pad_mode: earliest
+  history_pool_mode: keep
+  history_fuse_repeat: true
+  history_fuse_cos_th: 0.95
+  history_link_iou_th: 0.20
+  history_link_iou_margin: 0.05
+  clear_iou: 0.50
+  detection_filtering: score_threshold_only
+
+tracker:
+  cfg_name: amt_l48_fixed_release
+  det_low_th: 0.12
+  det_high_th: 0.60
+  det_nms_iou: 0.90
+  fishiou_th: 0.25
+  w_fishiou: 1.00
+  w_app: 1.25
+  w_app_low: 0.50
+  w_app_stage3: 0.00
+  w_app_crowd: 0.55
+  crowd_fishiou_th: 0.05
+  crowd_count_th: 2
+  freeze_emb_in_crowd: true
+  emb_update_sim_th: 0.45
+  emb_update_fishiou_th: 0.40
+  reid_long_th: 0.62
+  reid_long_fishiou_gate: 0.05
+  stage2_use_app: true
+  stage3_update_emb: false
+  max_age: 30
+  min_hits: 2
+  min_hits_score_gate: 0.80
+  use_confirmed_cascade: true
+  drop_unconfirmed_on_miss: true
+  emb_bank_size: 1
+  emb_momentum: 1.0
+  emb_gain_high: 1.0
+  emb_gain_low: 1.0
+  inertia: 0.90
+  sim_relu: true
+  association_mode: cascade
+  fishiou_params:
+    alpha: 0.15
+    beta: 0.30
+    gamma: 0.25
+    adaptive_central: true
+    ar_ref: 2.0
+    ar_scale_min: 0.6
+    ar_scale_max: 1.4
+    w1: 1.0
+    w2: 0.3
+    w3: 0.1
+    w4: 0.2
+    w5: 0.4
+    output_range: [0.0, 1.0]
