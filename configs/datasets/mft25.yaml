@@ -1,0 +1,13 @@
+data_root: data/MFT25-train
+benchmark: MFT25
+trackeval_split: val
+sequences: [BT-001, BT-003, BT-005, MSK-002, PF-001, SN-001, SN-013, SN-015]
+gt_file: gt/gt_val_half.txt
+full_gt_file: gt/gt.txt
+reid_source_gt_file: gt/gt_train_half.txt
+det_file: det/det_yolox_ckpt.txt
+image_dir: img1
+image_ext: .jpg
+frame_rate: 25
+image_width: 1920
+image_height: 1080

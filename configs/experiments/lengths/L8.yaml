@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: outputs/training/mamba_l8/seed_{seed}/best.pt
+seeds: [0, 1, 2]
+experiment_id: L8
+family: temporal_length
+model_config: configs/models/mamba_l8.yaml
+sequence_length: 8
+representation: online_per_track_fifo
+write_policy: reliability_first
+

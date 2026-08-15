@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+experiment_id: external_cct_zero_shot
+family: external_validation
+dataset_config: configs/datasets/cct_template.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+representation: online_per_track_fifo
+write_policy: reliability_first
+reid_training: MFT25 only
+detection_input: fixed CCT detections
+

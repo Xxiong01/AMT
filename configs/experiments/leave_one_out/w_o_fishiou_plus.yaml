@@ -1,0 +1,17 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+experiment_id: LOO_FishIoUPlus
+family: leave_one_out
+label: AMT without FishIoU+
+representation: online_per_track_fifo
+association:
+  geometry: iou
+  cascade: true
+  crowd_appearance_suppression: true
+  geometry_confidence_scaling: true
+write_policy: reliability_first
+reactivation: true
+notes: Standard IoU replaces FishIoU+ in association, FIFO-write geometry gating, and re-activation; all numerical thresholds and other modules remain fixed.

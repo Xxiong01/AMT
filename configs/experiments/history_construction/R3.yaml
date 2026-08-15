@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+notes: Controlled comparison only; not the AMT main inference path.
+experiment_id: R3
+family: history_construction
+representation: repeat_current_frame
+repeat_length: 48
+single_frame_fallback: false
+

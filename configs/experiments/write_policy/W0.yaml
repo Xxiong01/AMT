@@ -1,0 +1,17 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+representation: online_per_track_fifo
+association:
+  geometry: fishiou_plus
+  cascade: true
+  crowd_appearance_suppression: true
+  geometry_confidence_scaling: true
+reactivation: true
+experiment_id: W0
+family: write_policy
+label: All successful matches write
+write_policy: all_matches
+

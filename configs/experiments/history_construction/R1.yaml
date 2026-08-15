@@ -1,0 +1,13 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+notes: Controlled comparison only; not the AMT main inference path.
+experiment_id: R1
+family: history_construction
+representation: detection_linked_history
+history_iou_threshold: 0.20
+single_frame_fallback: true
+fallback_cosine_threshold: 0.95
+

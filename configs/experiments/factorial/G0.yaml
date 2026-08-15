@@ -1,0 +1,16 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: outputs/training/mamba_l48/seed_{seed}/best.pt
+seeds: [0, 1, 2]
+experiment_id: G0
+family: factorial
+representation: online_per_track_fifo
+write_policy: reliability_first
+association:
+  geometry: fishiou_plus
+  cascade: true
+  crowd_appearance_suppression: true
+  geometry_confidence_scaling: false
+reactivation: true
+

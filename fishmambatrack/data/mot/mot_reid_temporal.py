@@ -8,15 +8,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import pickle
-import random
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, Union
-
-import numpy as np
+from typing import Dict, List, Optional, Tuple, Union
 
 try:
     import torch
@@ -24,11 +20,11 @@ try:
 except Exception as e:
     raise RuntimeError("PyTorch is required for mot_reid_temporal.py") from e
 
-from PIL import Image, ImageFilter
+from PIL import Image
 
 from .mot_seq import MOTSequence
 from .mot_utils import discover_sequence_dirs
-from .mot_reid import crop_tlwh, default_transform, _apply_color_jitter, _random_erasing_
+from .image_ops import crop_tlwh, default_transform
 
 
 @dataclass
@@ -102,19 +98,6 @@ class MOTReIDTrackletDataset(Dataset):
         out_size: Tuple[int, int] = (256, 128),  # (H,W)
         normalize: bool = True,
         transform=None,
-        # augmentation
-        augment: bool = False,
-        seq_jitter_consistent: bool = True,
-        bbox_jitter_prob: float = 0.80,
-        bbox_jitter_center: float = 0.05,
-        bbox_jitter_scale: float = 0.15,
-        pad_ratio_jitter: float = 0.50,
-        color_jitter: float = 0.20,
-        blur_prob: float = 0.05,
-        blur_radius_max: float = 1.5,
-        noise_std: float = 0.00,
-        random_erasing_prob: float = 0.25,
-        random_erasing_value: float = 0.0,
         # crop cache
         crop_cache_dir: Optional[Union[str, Path]] = None,
         crop_cache_format: str = "jpg",
@@ -140,6 +123,10 @@ class MOTReIDTrackletDataset(Dataset):
         self.frame_stride = int(frame_stride)
         self.seq_stride = int(seq_stride)
         self.max_frame_gap = int(max_frame_gap)
+        if self.seq_len <= 0 or self.frame_stride <= 0 or self.seq_stride <= 0:
+            raise ValueError("seq_len, frame_stride, and seq_stride must be positive.")
+        if self.max_frame_gap < 1:
+            raise ValueError("max_frame_gap must be at least 1.")
 
         self.crop_pad_ratio = float(crop_pad_ratio)
         self.out_size = tuple(out_size)
@@ -147,20 +134,9 @@ class MOTReIDTrackletDataset(Dataset):
         self.transform = transform
         self.return_meta = bool(return_meta)
 
-        self.augment = bool(augment)
-        self.seq_jitter_consistent = bool(seq_jitter_consistent)
-        self.bbox_jitter_prob = float(bbox_jitter_prob)
-        self.bbox_jitter_center = float(bbox_jitter_center)
-        self.bbox_jitter_scale = float(bbox_jitter_scale)
-        self.pad_ratio_jitter = float(pad_ratio_jitter)
-        self.color_jitter = float(color_jitter)
-        self.blur_prob = float(blur_prob)
-        self.blur_radius_max = float(blur_radius_max)
-        self.noise_std = float(noise_std)
-        self.random_erasing_prob = float(random_erasing_prob)
-        self.random_erasing_value = float(random_erasing_value)
-
-        self.crop_cache_dir = Path(crop_cache_dir) if crop_cache_dir is not None else None
+        self.crop_cache_dir = (
+            Path(crop_cache_dir) if crop_cache_dir is not None else None
+        )
         self.crop_cache_format = str(crop_cache_format).lower().strip()
         self.crop_cache_quality = int(crop_cache_quality)
         self.crop_cache_strict = bool(crop_cache_strict)
@@ -168,21 +144,24 @@ class MOTReIDTrackletDataset(Dataset):
         if self.crop_cache_dir is not None:
             self.crop_cache_dir.mkdir(parents=True, exist_ok=True)
             self._check_crop_cache_meta()
-            if self.bbox_jitter_prob > 0 or self.pad_ratio_jitter > 0:
-                print("[MOTReIDTrackletDataset] crop_cache enabled: disabling bbox/pad jitter for determinism")
-            self.bbox_jitter_prob = 0.0
-            self.pad_ratio_jitter = 0.0
 
         self.items: List[ReIDSeqItem] = []
         self.pid_to_indices: Dict[int, List[int]] = {}
         self.pid_map: Dict[Tuple[str, int], int] = {}
-        self.track_map: Dict[Tuple[str, int], List[Tuple[int, int, str, Tuple[float, float, float, float]]]] = {}
+        self.track_map: Dict[
+            Tuple[str, int],
+            List[Tuple[int, int, str, Tuple[float, float, float, float]]],
+        ] = {}
 
         self.cache_path = Path(cache_path) if cache_path is not None else None
         if self.cache_path is not None:
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if self.cache_path is not None and self.cache_path.exists() and (not rebuild_cache):
+        if (
+            self.cache_path is not None
+            and self.cache_path.exists()
+            and (not rebuild_cache)
+        ):
             self._load_cache(self.cache_path)
         else:
             self._build(skip_missing_gt=skip_missing_gt, limit_seqs=limit_seqs)
@@ -219,7 +198,10 @@ class MOTReIDTrackletDataset(Dataset):
     def _load_cache(self, path: Path) -> None:
         class _SeqUnpickler(pickle.Unpickler):
             def find_class(self, module: str, name: str):
-                if name == "ReIDSeqItem" and module in {"__main__", "mot_reid_temporal"}:
+                if name == "ReIDSeqItem" and module in {
+                    "__main__",
+                    "mot_reid_temporal",
+                }:
                     return ReIDSeqItem
                 return super().find_class(module, name)
 
@@ -253,7 +235,9 @@ class MOTReIDTrackletDataset(Dataset):
         self.items = payload["items"]
         self.pid_map = payload.get("pid_map", {})
         self.track_map = payload.get("track_map", {})
-        print(f"[MOTReIDTrackletDataset] Cache loaded: {path} (items={len(self.items)})")
+        print(
+            f"[MOTReIDTrackletDataset] Cache loaded: {path} (items={len(self.items)})"
+        )
 
     def _crop_cache_meta_path(self) -> Optional[Path]:
         if self.crop_cache_dir is None:
@@ -264,11 +248,8 @@ class MOTReIDTrackletDataset(Dataset):
         meta_path = self._crop_cache_meta_path()
         if meta_path is None:
             return
-        if not meta_path.exists():
-            return
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         expected = {
-            "root": str(self.root),
+            "root": str(self.root.resolve()),
             "seq_glob": str(self.seq_glob),
             "gt_name": str(self.gt_name),
             "full_gt_name": str(self.full_gt_name),
@@ -278,21 +259,46 @@ class MOTReIDTrackletDataset(Dataset):
             "format": self.crop_cache_format,
             "resize_mode": "pad",
         }
+        if not meta_path.exists():
+            existing_files = [
+                path
+                for path in self.crop_cache_dir.rglob("*")
+                if path.is_file() and path != meta_path
+            ]
+            if existing_files and self.crop_cache_strict:
+                raise RuntimeError(
+                    f"Crop cache contains files but has no metadata: {self.crop_cache_dir}"
+                )
+            temporary = meta_path.with_name(f".{meta_path.name}.{uuid.uuid4().hex}.tmp")
+            temporary.write_text(
+                json.dumps(expected, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            temporary.replace(meta_path)
+            return
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
         mismatches = []
         for k, v in expected.items():
             if meta.get(k, None) != v:
                 mismatches.append((k, meta.get(k, None), v))
         if mismatches and self.crop_cache_strict:
-            lines = [f"Crop cache meta mismatch for {meta_path} (please rebuild cache):"]
+            lines = [
+                f"Crop cache meta mismatch for {meta_path} (please rebuild cache):"
+            ]
             for k, got, exp in mismatches:
                 lines.append(f"  - {k}: cache={got!r} expected={exp!r}")
             raise RuntimeError("\n".join(lines))
 
-    def _crop_cache_path(self, *, seq_name: str, global_frame: int, track_id: int) -> Path:
+    def _crop_cache_path(
+        self, *, seq_name: str, global_frame: int, track_id: int
+    ) -> Path:
         if self.crop_cache_dir is None:
             raise RuntimeError("crop_cache_dir is not set")
         ext = self.crop_cache_format
-        return self.crop_cache_dir / seq_name / f"{int(global_frame):06d}_tid{int(track_id)}.{ext}"
+        return (
+            self.crop_cache_dir
+            / seq_name
+            / f"{int(global_frame):06d}_tid{int(track_id)}.{ext}"
+        )
 
     def _save_crop_cache(self, crop: Image.Image, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -307,23 +313,29 @@ class MOTReIDTrackletDataset(Dataset):
         tmp_path.replace(path)
 
     def _build(self, *, skip_missing_gt: bool, limit_seqs: Optional[int]) -> None:
-        seq_dirs = discover_sequence_dirs(self.root, seq_glob=self.seq_glob, img_dir_name=self.img_dir_name, sort=True)
+        seq_dirs = discover_sequence_dirs(
+            self.root, seq_glob=self.seq_glob, img_dir_name=self.img_dir_name, sort=True
+        )
         if limit_seqs is not None:
             seq_dirs = seq_dirs[: int(limit_seqs)]
         if not seq_dirs:
-            raise RuntimeError(f"No sequences found under {self.root} with glob={self.seq_glob}")
+            raise RuntimeError(
+                f"No sequences found under {self.root} with glob={self.seq_glob}"
+            )
 
         pid_map: Dict[Tuple[str, int], int] = {}
         next_pid = 0
         items: List[ReIDSeqItem] = []
-        track_map: Dict[Tuple[str, int], List[Tuple[int, int, str, Tuple[float, float, float, float]]]] = {}
+        track_map: Dict[
+            Tuple[str, int],
+            List[Tuple[int, int, str, Tuple[float, float, float, float]]],
+        ] = {}
 
         used = 0
         min_len = _min_len_for_seq(self.seq_len, self.frame_stride)
 
         for seq_dir in seq_dirs:
             gt_path = seq_dir / "gt" / self.gt_name
-            full_gt_path = seq_dir / "gt" / self.full_gt_name
             if not gt_path.exists():
                 if skip_missing_gt:
                     print(f"[MOTReIDTrackletDataset] Skip (missing GT): {gt_path}")
@@ -339,7 +351,9 @@ class MOTReIDTrackletDataset(Dataset):
                 drop_ignored_gt=True,
             )
 
-            track_to_list: Dict[int, List[Tuple[int, Tuple[float, float, float, float]]]] = {}
+            track_to_list: Dict[
+                int, List[Tuple[int, Tuple[float, float, float, float]]]
+            ] = {}
             for f, recs in seq.gt_by_frame.items():
                 for r in recs:
                     track_to_list.setdefault(r.track_id, []).append((f, r.tlwh))
@@ -382,56 +396,24 @@ class MOTReIDTrackletDataset(Dataset):
             used += 1
 
         if used == 0:
-            raise RuntimeError(f"No usable sequences found (gt_name={self.gt_name}) under {self.root}")
+            raise RuntimeError(
+                f"No usable sequences found (gt_name={self.gt_name}) under {self.root}"
+            )
 
         items.sort(key=lambda it: (it.track_key[0], it.pid, it.start))
         self.items = items
         self.pid_map = pid_map
         self.track_map = track_map
 
-        print(f"[MOTReIDTrackletDataset] Built items={len(self.items)} pids={len(set([it.pid for it in items]))} "
-              f"seqs={used} seq_len={self.seq_len} frame_stride={self.frame_stride} seq_stride={self.seq_stride}")
+        print(
+            f"[MOTReIDTrackletDataset] Built items={len(self.items)} "
+            f"pids={len({it.pid for it in items})} seqs={used} "
+            f"seq_len={self.seq_len} frame_stride={self.frame_stride} "
+            f"seq_stride={self.seq_stride}"
+        )
 
     def __len__(self) -> int:
         return len(self.items)
-
-    def _maybe_jitter_pad_ratio(self) -> float:
-        if (not self.augment) or self.pad_ratio_jitter <= 0:
-            return float(self.crop_pad_ratio)
-        j = float(self.pad_ratio_jitter)
-        lo = max(0.0, 1.0 - j)
-        hi = 1.0 + j
-        return float(self.crop_pad_ratio) * random.uniform(lo, hi)
-
-    def _sample_jitter_params(self) -> Optional[Tuple[float, float, float, float]]:
-        if (not self.augment) or (self.bbox_jitter_prob <= 0) or (random.random() >= self.bbox_jitter_prob):
-            return None
-        dx = random.uniform(-1.0, 1.0) * self.bbox_jitter_center
-        dy = random.uniform(-1.0, 1.0) * self.bbox_jitter_center
-        sw = math.exp(random.uniform(-self.bbox_jitter_scale, self.bbox_jitter_scale))
-        sh = math.exp(random.uniform(-self.bbox_jitter_scale, self.bbox_jitter_scale))
-        return (dx, dy, sw, sh)
-
-    def _apply_jitter(
-        self,
-        tlwh: Tuple[float, float, float, float],
-        params: Optional[Tuple[float, float, float, float]],
-    ) -> Tuple[float, float, float, float]:
-        if params is None:
-            return tlwh
-        x, y, w, h = map(float, tlwh)
-        if w <= 1.0 or h <= 1.0:
-            return tlwh
-        dx, dy, sw, sh = params
-        cx = x + 0.5 * w
-        cy = y + 0.5 * h
-        w2 = max(2.0, w * sw)
-        h2 = max(2.0, h * sh)
-        cx2 = cx + dx * w
-        cy2 = cy + dy * h
-        x2 = cx2 - 0.5 * w2
-        y2 = cy2 - 0.5 * h2
-        return (x2, y2, w2, h2)
 
     def __getitem__(self, index: int):
         it = self.items[index]
@@ -439,9 +421,6 @@ class MOTReIDTrackletDataset(Dataset):
         idxs = [it.start + i * it.frame_stride for i in range(it.length)]
         if idxs[-1] >= len(track):
             raise IndexError(f"Sequence index out of range for track {it.track_key}")
-
-        pad_ratio = self._maybe_jitter_pad_ratio()
-        jitter_params = self._sample_jitter_params() if self.seq_jitter_consistent else None
 
         xs: List[torch.Tensor] = []
         metas = []
@@ -461,10 +440,7 @@ class MOTReIDTrackletDataset(Dataset):
                 with Image.open(img_path) as _im:
                     img = _im.convert("RGB")
 
-                tlwh_use = self._apply_jitter(
-                    tlwh, jitter_params if self.seq_jitter_consistent else self._sample_jitter_params()
-                )
-                crop = crop_tlwh(img, tlwh_use, pad_ratio=pad_ratio)
+                crop = crop_tlwh(img, tlwh, pad_ratio=self.crop_pad_ratio)
                 crop = _resize_with_pad(crop, self.out_size)
                 if self.crop_cache_dir is not None and self.crop_cache_lazy:
                     cache_path = self._crop_cache_path(
@@ -474,32 +450,25 @@ class MOTReIDTrackletDataset(Dataset):
                     )
                     self._save_crop_cache(crop, cache_path)
 
-            if self.augment:
-                crop = _apply_color_jitter(crop, strength=self.color_jitter)
-                if self.blur_prob > 0 and random.random() < self.blur_prob:
-                    r = random.uniform(0.1, max(0.1, self.blur_radius_max))
-                    crop = crop.filter(ImageFilter.GaussianBlur(radius=r))
-
             if self.transform is None:
-                x = default_transform(crop, size=self.out_size, normalize=self.normalize)
+                x = default_transform(
+                    crop, size=self.out_size, normalize=self.normalize
+                )
             else:
                 x = self.transform(crop)
 
-            if self.augment and self.noise_std > 0:
-                x = x + torch.randn_like(x) * float(self.noise_std)
-            if self.augment:
-                x = _random_erasing_(x, p=self.random_erasing_prob, value=self.random_erasing_value)
-
             xs.append(x)
             if self.return_meta:
-                metas.append({
-                    "seq_name": it.track_key[0],
-                    "track_id": it.track_id,
-                    "frame": frame,
-                    "global_frame": global_frame,
-                    "img_path": img_path,
-                    "tlwh": tlwh,
-                })
+                metas.append(
+                    {
+                        "seq_name": it.track_key[0],
+                        "track_id": it.track_id,
+                        "frame": frame,
+                        "global_frame": global_frame,
+                        "img_path": img_path,
+                        "tlwh": tlwh,
+                    }
+                )
 
         x_seq = torch.stack(xs, dim=0)
         pid = int(it.pid)
@@ -540,7 +509,9 @@ def _main() -> None:
     print(f"Dataset len={len(ds)} num_pids={ds.num_pids} seq_len={ds.seq_len}")
     for i in range(min(3, len(ds))):
         x, pid, meta = ds[i]
-        print(f"[{i}] pid={pid} x.shape={tuple(x.shape)} frames={[m['frame'] for m in meta]}")
+        print(
+            f"[{i}] pid={pid} x.shape={tuple(x.shape)} frames={[m['frame'] for m in meta]}"
+        )
 
 
 if __name__ == "__main__":

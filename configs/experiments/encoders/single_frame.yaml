@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: outputs/training/single_frame/seed_{seed}/best.pt
+seeds: [0, 1, 2]
+experiment_id: encoder_single_frame
+family: encoder_comparison
+model_config: configs/models/single_frame.yaml
+sequence_length: 1
+representation: single_frame
+write_policy: reliability_first
+

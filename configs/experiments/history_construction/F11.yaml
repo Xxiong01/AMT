@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+notes: Controlled comparison only; not the AMT main inference path.
+experiment_id: F11
+family: history_construction
+representation: online_per_track_fifo
+write_policy: reliability_first
+single_frame_fallback: false
+

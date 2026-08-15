@@ -1,0 +1,1 @@
+"""AMT association logic."""

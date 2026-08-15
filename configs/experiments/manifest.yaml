@@ -1,0 +1,35 @@
+experiments:
+  main_result:
+    configs: [configs/tracker/amt_l48.yaml, configs/models/mamba_l48.yaml]
+  history_construction:
+    configs: [configs/experiments/history_construction/R1.yaml, configs/experiments/history_construction/R2.yaml, configs/experiments/history_construction/R3.yaml, configs/experiments/history_construction/F11.yaml]
+  reliability_diagnostics:
+    configs: [configs/experiments/factorial/F10.yaml, configs/experiments/factorial/F11.yaml, configs/experiments/factorial/G0.yaml]
+  cumulative_ablation:
+    config_glob: configs/experiments/cumulative/C*.yaml
+  leave_one_out:
+    config_glob: configs/experiments/leave_one_out/*.yaml
+  tracker_sensitivity:
+    configs: [configs/experiments/hyperparameter_sensitivity/ofat.yaml]
+  accuracy_idsw_operating_points:
+    config_glob: configs/experiments/operating_points/P*.yaml
+  detection_thresholds:
+    config_glob: configs/experiments/thresholds/*.yaml
+  detection_dropout:
+    config_glob: configs/experiments/detection_dropout/*.yaml
+  external_validation:
+    configs: [configs/experiments/external_validation/cct_zero_shot.yaml, configs/datasets/cct_template.yaml]
+  internal_scene_analysis:
+    configs: [configs/experiments/scene_analysis/mft25_scenes.yaml]
+  paired_statistics:
+    configs: [configs/experiments/paired_statistics/wilcoxon.yaml]
+  temporal_length:
+    config_glob: configs/experiments/lengths/L*.yaml
+  encoder_comparison:
+    config_glob: configs/experiments/encoders/*.yaml
+  cached_efficiency:
+    configs: [configs/experiments/runtime/cached.yaml]
+  cold_efficiency:
+    configs: [configs/experiments/runtime/cold.yaml]
+  write_policy:
+    config_glob: configs/experiments/write_policy/W*.yaml

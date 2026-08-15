@@ -93,12 +93,16 @@ def _split_tokens(line: str) -> List[str]:
     return [t for t in _SEP_RE.split(line) if t]
 
 
-def _parse_float(tok: str, *, path: Path, line_no: int, strict: bool) -> Optional[float]:
+def _parse_float(
+    tok: str, *, path: Path, line_no: int, strict: bool
+) -> Optional[float]:
     try:
         return float(tok)
     except Exception:
         if strict:
-            raise MotFormatError(f"Cannot parse float token='{tok}' at {path}:{line_no}")
+            raise MotFormatError(
+                f"Cannot parse float token='{tok}' at {path}:{line_no}"
+            )
         return None
 
 
@@ -130,7 +134,9 @@ def parse_mot_line(
     # Skip header-like rows when not strict
     if not _is_number_token(tokens[0]):
         if strict:
-            raise MotFormatError(f"Non-numeric header token='{tokens[0]}' at {path}:{line_no}")
+            raise MotFormatError(
+                f"Non-numeric header token='{tokens[0]}' at {path}:{line_no}"
+            )
         return None
 
     if len(tokens) < 6:
@@ -286,7 +292,9 @@ def summarize_records(records: Sequence[MotRecord]) -> Dict[str, float]:
 def _main() -> None:
     ap = argparse.ArgumentParser(description="Quickly inspect a MOT txt file.")
     ap.add_argument("path", type=str, help="Path to gt/det txt")
-    ap.add_argument("--gt", action="store_true", help="Treat as GT file (drop conf==0 by default)")
+    ap.add_argument(
+        "--gt", action="store_true", help="Treat as GT file (drop conf==0 by default)"
+    )
     ap.add_argument("--det", action="store_true", help="Treat as DET file")
     ap.add_argument("--keep-ignored", action="store_true", help="Keep GT conf==0 rows")
     ap.add_argument("--strict", action="store_true", help="Strict parsing")

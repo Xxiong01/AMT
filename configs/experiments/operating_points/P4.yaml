@@ -1,0 +1,15 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+experiment_id: P4
+family: operating_points
+label: Strict re-activation
+representation: online_per_track_fifo
+write_policy: reliability_first
+tracker_overrides:
+  reid_long_fishiou_gate: 0.11
+  reid_long_th: 0.785
+  emb_update_sim_th: 0.525
+

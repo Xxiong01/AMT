@@ -21,10 +21,12 @@ def _import_mamba():
     # Try multiple import paths for compatibility across versions.
     try:
         from mamba_ssm.modules.mamba_simple import Mamba  # type: ignore
+
         return Mamba
     except Exception:
         try:
             from mamba_ssm import Mamba  # type: ignore
+
             return Mamba
         except Exception as e:
             raise ImportError(
@@ -56,7 +58,9 @@ class MambaBlock(nn.Module):
             d_conv=cfg.d_conv,
             expand=cfg.expand,
         )
-        self.drop = nn.Dropout(p=float(cfg.dropout)) if cfg.dropout > 0 else nn.Identity()
+        self.drop = (
+            nn.Dropout(p=float(cfg.dropout)) if cfg.dropout > 0 else nn.Identity()
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, L, D)

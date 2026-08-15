@@ -1,0 +1,9 @@
+controlled_comparison_only: true
+experiment_id: paired_statistics
+family: paired_statistics
+sequences: [BT-001, BT-003, BT-005, MSK-002, PF-001, SN-001, SN-013, SN-015]
+comparisons: [SU-T w/ ReID, OC-SORT]
+metrics: [HOTA, AssA, IDF1, IDSW]
+test: Wilcoxon signed-rank, two-sided
+effect_size: rank-biserial correlation
+paired_gain: median

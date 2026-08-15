@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional, Tuple, Union
+from typing import Dict, Iterator, List, Optional, Union
 
 from .mot_parser import MotRecord, index_by_frame, read_mot_file, summarize_records
 from .mot_utils import (
@@ -34,8 +34,8 @@ from .mot_utils import (
 @dataclass
 class FrameData:
     seq_name: str
-    frame: int          # local frame index (as in split gt)
-    global_frame: int   # global frame index (image file index)
+    frame: int  # local frame index (as in split gt)
+    global_frame: int  # global frame index (image file index)
     img_path: Path
     det: List[MotRecord]
     gt: List[MotRecord]
@@ -112,8 +112,12 @@ class MOTSequence:
             self.frame_offset = int(frame_offset)
         else:
             # If using a split GT file (not equal to full gt) and full gt exists, infer offset
-            if self.full_gt_path.exists() and (self.gt_path.resolve() != self.full_gt_path.resolve()):
-                self.frame_offset = infer_frame_offset_from_full_gt(self.gt_path, self.full_gt_path)
+            if self.full_gt_path.exists() and (
+                self.gt_path.resolve() != self.full_gt_path.resolve()
+            ):
+                self.frame_offset = infer_frame_offset_from_full_gt(
+                    self.gt_path, self.full_gt_path
+                )
             else:
                 self.frame_offset = 0
 
@@ -121,7 +125,9 @@ class MOTSequence:
         # Usually GT covers every frame; we use continuous range for safety.
         if self.gt_max_frame <= 0:
             raise RuntimeError(f"No GT records loaded from {self.gt_path}")
-        self.local_frames: List[int] = list(range(self.gt_min_frame, self.gt_max_frame + 1))
+        self.local_frames: List[int] = list(
+            range(self.gt_min_frame, self.gt_max_frame + 1)
+        )
 
         # Load DET (convert to local frame space if det is global)
         self.det_by_frame: Dict[int, List[MotRecord]] = {}
@@ -135,7 +141,6 @@ class MOTSequence:
                 sort=True,
             )
             det_stats = summarize_records(det_recs)
-            det_min = int(det_stats.get("min_frame", 1.0)) if det_recs else 1
             det_max = int(det_stats.get("max_frame", 0.0)) if det_recs else 0
 
             if det_is_global is not None:
@@ -210,13 +215,37 @@ class MOTSequence:
 
 
 def _main() -> None:
-    ap = argparse.ArgumentParser("Inspect one MOT sequence view (with split-gt support).")
-    ap.add_argument("--seq_dir", type=str, required=True, help="Sequence folder, e.g. data/MFT25-train/BT-001")
-    ap.add_argument("--gt", type=str, default="gt/gt.txt", help="GT relative path inside sequence")
-    ap.add_argument("--full_gt", type=str, default="gt/gt.txt", help="Full GT relative path (for offset inference)")
-    ap.add_argument("--det", type=str, default="det/det.txt", help="DET relative path inside sequence")
+    ap = argparse.ArgumentParser(
+        "Inspect one MOT sequence view (with split-gt support)."
+    )
+    ap.add_argument(
+        "--seq_dir",
+        type=str,
+        required=True,
+        help="Sequence folder, e.g. data/MFT25-train/BT-001",
+    )
+    ap.add_argument(
+        "--gt", type=str, default="gt/gt.txt", help="GT relative path inside sequence"
+    )
+    ap.add_argument(
+        "--full_gt",
+        type=str,
+        default="gt/gt.txt",
+        help="Full GT relative path (for offset inference)",
+    )
+    ap.add_argument(
+        "--det",
+        type=str,
+        default="det/det.txt",
+        help="DET relative path inside sequence",
+    )
     ap.add_argument("--no_det", action="store_true", help="Do not load det")
-    ap.add_argument("--frame_offset", type=int, default=None, help="Manually set offset (override inference)")
+    ap.add_argument(
+        "--frame_offset",
+        type=int,
+        default=None,
+        help="Manually set offset (override inference)",
+    )
     args = ap.parse_args()
 
     det_rel = None if args.no_det else args.det
@@ -237,8 +266,14 @@ def _main() -> None:
     f1 = seq.local_frames[-1]
     d0 = seq.get_frame(f0)
     d1 = seq.get_frame(f1)
-    print(f"\nFirst local frame={f0} -> global={d0.global_frame} img={d0.img_path.name} gt={len(d0.gt)} det={len(d0.det)}")
-    print(f"Last  local frame={f1} -> global={d1.global_frame} img={d1.img_path.name} gt={len(d1.gt)} det={len(d1.det)}")
+    print(
+        f"\nFirst local frame={f0} -> global={d0.global_frame} "
+        f"img={d0.img_path.name} gt={len(d0.gt)} det={len(d0.det)}"
+    )
+    print(
+        f"Last  local frame={f1} -> global={d1.global_frame} "
+        f"img={d1.img_path.name} gt={len(d1.gt)} det={len(d1.det)}"
+    )
 
     # quick sanity: ensure all frames have an image
     missing = 0

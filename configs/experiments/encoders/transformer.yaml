@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: outputs/training/transformer_l48/seed_{seed}/best.pt
+seeds: [0, 1, 2]
+experiment_id: encoder_transformer
+family: encoder_comparison
+model_config: configs/models/transformer_l48.yaml
+sequence_length: 48
+representation: online_per_track_fifo
+write_policy: reliability_first
+

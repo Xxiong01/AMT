@@ -1,0 +1,37 @@
+model:
+  name: mamba
+  pool_mode: mean_last
+  config:
+    mamba_d_model: 256
+    mamba_layers: 2
+    mamba_d_state: 16
+    mamba_d_conv: 4
+    mamba_expand: 2
+    mamba_dropout: 0.10
+    max_seq_len: 8
+    emb_dim: 256
+sequence:
+  length: 8
+  frame_stride: 1
+  seq_stride: 3
+  max_gap: 2
+data:
+  root: data/MFT25-reid-protocol
+  sequence_glob: '*'
+  train_gt_file: gt_train_fit.txt
+  dev_gt_file: gt_dev.txt
+  full_gt_file: gt.txt
+  input_size: [128, 256]
+  crop_pad: 0.10
+  train_index_cache: outputs/index/mamba_l8_train.pkl
+  dev_index_cache: outputs/index/mamba_l8_dev.pkl
+training:
+  epochs: 100
+  batch_size: 16
+  evaluation_batch_size: 8
+  instances_per_identity: 4
+  workers: 4
+  pin_memory: true
+  learning_rate: 0.0003
+  weight_decay: 0.0001
+  triplet_margin: 0.3

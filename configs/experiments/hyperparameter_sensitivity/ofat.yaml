@@ -1,0 +1,17 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+experiment_id: tracker_parameter_ofat
+family: hyperparameter_sensitivity
+evaluation_split: MFT25-Val
+selection_role: post_hoc_sensitivity_only
+crowd_count_off_sentinel: 1
+one_factor_at_a_time:
+  crowd_count_th: [1, 2, 3]
+  emb_update_fishiou_th: [0.35, 0.40, 0.45]
+  emb_update_sim_th: [0.40, 0.475, 0.50]
+  reid_long_fishiou_gate: [0.03, 0.05, 0.08]
+  reid_long_th: [0.65, 0.70, 0.735]
+  w_app: [1.0, 1.25, 1.5]

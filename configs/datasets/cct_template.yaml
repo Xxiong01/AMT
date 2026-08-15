@@ -1,0 +1,13 @@
+data_root: data/CCT_FIXED
+benchmark: CCT_FIXED
+trackeval_split: test
+sequences: [replace_with_clip_ids]
+gt_file: gt/gt.txt
+full_gt_file: gt/gt.txt
+det_file: det/det.txt
+image_dir: img1
+image_ext: .jpg
+frame_rate: 25
+image_width: 1920
+image_height: 1080
+availability: available upon reasonable request

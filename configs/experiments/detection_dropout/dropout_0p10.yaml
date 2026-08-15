@@ -1,0 +1,12 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+experiment_id: dropout_0p10
+family: detection_dropout
+perturbation_seeds: [0, 1, 2]
+detection:
+  dropout_ratio: 0.10
+tracker_hyperparameters_frozen: true
+

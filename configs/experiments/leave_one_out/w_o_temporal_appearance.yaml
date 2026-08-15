@@ -1,0 +1,18 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+experiment_id: LOO_TemporalAppearance
+family: leave_one_out
+label: AMT without temporal appearance branch
+representation: appearance_disabled
+association:
+  geometry: iou
+  appearance: false
+  cascade: true
+  crowd_appearance_suppression: false
+  geometry_confidence_scaling: false
+write_policy: disabled
+reactivation: false
+notes: Disables appearance computation and temporal memory; standard IoU replaces FishIoU+ for geometry-only association and gating.

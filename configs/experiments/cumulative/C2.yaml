@@ -1,0 +1,16 @@
+controlled_comparison_only: true
+dataset_config: configs/datasets/mft25.yaml
+tracker_config: configs/tracker/amt_l48.yaml
+checkpoint: checkpoints/best.pt
+seeds: [0]
+experiment_id: C2
+family: cumulative
+label: + three-stage cascade
+representation: single_frame
+association:
+  geometry: fishiou_plus
+  cascade: true
+  crowd_appearance_suppression: false
+  geometry_confidence_scaling: false
+write_policy: all_matches
+reactivation: false

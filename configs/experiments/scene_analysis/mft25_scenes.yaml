@@ -1,0 +1,9 @@
+controlled_comparison_only: true
+experiment_id: internal_scene_analysis
+family: scene_analysis
+source_run: outputs/main
+scene_groups:
+  BT: [BT-001, BT-003, BT-005]
+  MSK: [MSK-002]
+  PF: [PF-001]
+  SN: [SN-001, SN-013, SN-015]
