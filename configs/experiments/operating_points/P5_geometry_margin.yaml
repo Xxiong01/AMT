@@ -3,13 +3,10 @@ dataset_config: configs/datasets/mft25.yaml
 tracker_config: configs/tracker/amt_l48.yaml
 checkpoint: checkpoints/best.pt
 seeds: [0]
-experiment_id: P1
+experiment_id: P5_geometry_margin
 family: operating_points
-label: Intermediate recovery
+label: Geometry margin
 representation: online_per_track_fifo
 write_policy: reliability_first
 tracker_overrides:
-  reid_long_fishiou_gate: 0.08
-  reid_long_th: 0.71
-  emb_update_sim_th: 0.45
-
+  geometry_confidence_margin: 0.06

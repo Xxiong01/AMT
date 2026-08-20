@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from collections import Counter
+from collections import Counter, deque
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
@@ -286,6 +286,7 @@ def run_controlled_tracking(
         tracker = ControlledAMTTracker(tracker_cfg, experiment)
         predictions: Dict[int, List[Tuple[int, np.ndarray]]] = {}
         event_cursor = 0
+        histories: Dict[int, deque] = {}
         previous_detection_history: list[Tuple[np.ndarray, list[np.ndarray]]] = []
         fallback_count = 0
         query_count = 0
@@ -357,31 +358,56 @@ def run_controlled_tracking(
             events = tracker.diagnostic_events[event_cursor:]
             event_cursor = len(tracker.diagnostic_events)
             tracks_by_id = {int(track.track_id): track for track in tracker.tracks}
+            detections_by_key = {
+                _detection_key(detection.tlwh, detection.score): detection
+                for detection in detections
+            }
+            changed: list[int] = []
             for event in events:
                 track_id = int(event["track_id"])
-                if bool(event.get("update_emb", False)) and track_id in tracks_by_id:
-                    event["history_depth_after"] = len(
-                        tracks_by_id[track_id].temporal_history
+                if not bool(event.get("update_emb", False)):
+                    continue
+                if mode != "online_per_track_fifo":
+                    event["history_depth_after"] = 1
+                    continue
+                detection = detections_by_key.get(
+                    _detection_key(
+                        np.asarray(event["tlwh"], dtype=np.float32),
+                        float(event["score"]),
                     )
-            changed = {
-                int(event["track_id"])
-                for event in events
-                if bool(event.get("update_emb", False))
-            }
+                )
+                if detection is None or detection.frame_feature is None:
+                    raise KeyError(
+                        "A controlled FIFO write was accepted without a matching "
+                        f"current-frame feature: {sequence} frame {frame}: {event}"
+                    )
+                history = histories.setdefault(track_id, deque(maxlen=length))
+                if tracker.write_policy == "reliable_single_frame_replacement":
+                    history.clear()
+                history.append(np.asarray(detection.frame_feature, dtype=np.float32))
+                event["history_depth_after"] = len(history)
+                if track_id not in changed:
+                    changed.append(track_id)
+
+            live_track_ids = set(tracks_by_id)
+            for track_id in list(histories):
+                if track_id not in live_track_ids:
+                    histories.pop(track_id, None)
+
             if mode == "online_per_track_fifo" and changed:
                 phase_started = time.perf_counter()
                 tracks = {int(track.track_id): track for track in tracker.tracks}
                 valid = [
                     track_id
                     for track_id in changed
-                    if track_id in tracks and tracks[track_id].temporal_history
+                    if track_id in tracks and track_id in histories and histories[track_id]
                 ]
                 if valid:
                     mamba_token_count += len(valid) * length
                     values = np.stack(
                         [
                             _pad_earliest(
-                                list(tracks[track_id].temporal_history), length
+                                list(histories[track_id]), length
                             )
                             for track_id in valid
                         ]
@@ -400,7 +426,8 @@ def run_controlled_tracking(
                         _set_track_embedding(
                             tracks[track_id],
                             embedding,
-                            len(tracks[track_id].temporal_history),
+                            len(histories[track_id]),
+                            bank_size=int(tracker_cfg.emb_bank_size),
                         )
                 fifo_mamba_seconds += time.perf_counter() - phase_started
         mot_path = mot_root / f"{sequence}.txt"

@@ -15,7 +15,7 @@ import os
 import random
 import shutil
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -63,6 +63,9 @@ def sha256_file(path: str | Path) -> str:
 
 
 def set_determinism(seed: int) -> None:
+    # Required by PyTorch for deterministic CUDA matrix multiplication on
+    # CUDA >= 10.2.  Set it before any CUDA kernels are launched.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -121,10 +124,21 @@ def infer_frame_offset(split_gt: Path, full_gt: Path) -> int:
 def infer_detection_coordinates(
     det_frames: Sequence[int], gt_frames: Sequence[int], offset: int
 ) -> bool:
+    """Return True when detections use full-sequence rather than split indices.
+
+    A full-sequence detection file can cover both train and validation halves.
+    In that case the local and offset frame sets overlap by the same amount, so
+    overlap alone is ambiguous.  The larger detection-frame maximum resolves
+    that case without changing the behavior for validation-only local files.
+    """
     det_set, gt_set = set(det_frames), set(gt_frames)
+    if not det_set or not gt_set or offset == 0:
+        return False
     local_overlap = len(det_set & gt_set)
     global_overlap = len(det_set & {frame + offset for frame in gt_set})
-    return global_overlap > local_overlap
+    if global_overlap != local_overlap:
+        return global_overlap > local_overlap
+    return max(det_set) > max(gt_set)
 
 
 def crop_tlwh(image: Image.Image, box: np.ndarray, pad: float) -> Image.Image:
@@ -143,18 +157,15 @@ def crop_tlwh(image: Image.Image, box: np.ndarray, pad: float) -> Image.Image:
 
 
 def resize_with_pad(image: Image.Image, size: Sequence[int]) -> Image.Image:
+    """Resize a ReID crop to the training resolution.
+
+    The temporal ReID checkpoints were trained with torchvision's exact
+    ``Resize((height, width))`` transform.  Preserving the aspect ratio here
+    would create a train/evaluation mismatch, so evaluation intentionally uses
+    the same direct resize.
+    """
     output_height, output_width = int(size[0]), int(size[1])
-    width, height = image.size
-    scale = min(output_width / max(1, width), output_height / max(1, height))
-    resized_width = max(1, int(round(width * scale)))
-    resized_height = max(1, int(round(height * scale)))
-    resized = image.resize((resized_width, resized_height), resample=Image.BILINEAR)
-    canvas = Image.new("RGB", (output_width, output_height))
-    canvas.paste(
-        resized,
-        ((output_width - resized_width) // 2, (output_height - resized_height) // 2),
-    )
-    return canvas
+    return image.resize((output_width, output_height), resample=Image.BILINEAR)
 
 
 def transform_for() -> transforms.Compose:
@@ -271,10 +282,21 @@ def _pad_earliest(history: Sequence[np.ndarray], length: int) -> np.ndarray:
     return np.stack([values[0]] * (length - len(values)) + values, axis=0)
 
 
-def _set_track_embedding(track: object, embedding: np.ndarray, depth: int) -> None:
+def _set_track_embedding(
+    track: object, embedding: np.ndarray, depth: int, *, bank_size: int
+) -> None:
     value = l2_normalize(np.asarray(embedding, dtype=np.float32).reshape(1, -1))[0]
-    track.appearance_bank = value
+    track.emb = value
+    if int(bank_size) > 0:
+        track.emb_bank = deque([value], maxlen=int(bank_size))
+    else:
+        track.emb_bank = None
     track.temporal_history_depth = int(depth)
+
+
+def _box_key(box: np.ndarray, score: float) -> Tuple[float, float, float, float, float]:
+    values = [round(float(value), 3) for value in np.asarray(box).reshape(-1)[:4]]
+    return (*values, round(float(score), 6))
 
 
 def write_predictions(
@@ -428,6 +450,7 @@ def run_tracking(
         predictions: Dict[int, List[Tuple[int, np.ndarray]]] = {}
         event_cursor = 0
         write_depths: List[int] = []
+        histories: Dict[int, deque] = {}
         for frame in range(bounds[0], bounds[1] + 1):
             source_frame = frame + offset if detections_global else frame
             detections = encode_current_frame_detections(
@@ -452,29 +475,44 @@ def run_tracking(
             event_cursor = len(tracker.diagnostic_events)
             changed: List[int] = []
             tracks_by_id = {int(track.track_id): track for track in tracker.tracks}
+            detections_by_key = {
+                _box_key(detection.tlwh, detection.score): detection
+                for detection in detections
+            }
             for event in events:
                 if not bool(event.get("update_emb", False)):
                     continue
                 track_id = int(event["track_id"])
-                if track_id in tracks_by_id:
-                    event["history_depth_after"] = len(
-                        tracks_by_id[track_id].temporal_history
+                detection = detections_by_key.get(
+                    _box_key(np.asarray(event["tlwh"], dtype=np.float32), event["score"])
+                )
+                if detection is None or detection.frame_feature is None:
+                    raise KeyError(
+                        f"Missing current-frame feature for {sequence} frame {frame}: {event}"
                     )
+                history = histories.setdefault(track_id, deque(maxlen=sequence_length))
+                history.append(np.asarray(detection.frame_feature, dtype=np.float32))
+                event["history_depth_after"] = len(history)
                 if track_id not in changed:
                     changed.append(track_id)
+
+            active_ids = {int(track.track_id) for track in tracker.tracks}
+            for track_id in list(histories):
+                if track_id not in active_ids:
+                    histories.pop(track_id, None)
 
             if changed:
                 tracks = {int(track.track_id): track for track in tracker.tracks}
                 valid = [
                     track_id
                     for track_id in changed
-                    if track_id in tracks and tracks[track_id].temporal_history
+                    if track_id in tracks and track_id in histories and histories[track_id]
                 ]
                 if valid:
                     values = np.stack(
                         [
                             _pad_earliest(
-                                list(tracks[track_id].temporal_history), sequence_length
+                                list(histories[track_id]), sequence_length
                             )
                             for track_id in valid
                         ]
@@ -488,9 +526,14 @@ def run_tracking(
                     for track_id, embedding in zip(
                         valid, embeddings.float().cpu().numpy()
                     ):
-                        depth = len(tracks[track_id].temporal_history)
+                        depth = len(histories[track_id])
                         write_depths.append(depth)
-                        _set_track_embedding(tracks[track_id], embedding, depth)
+                        _set_track_embedding(
+                            tracks[track_id],
+                            embedding,
+                            depth,
+                            bank_size=int(tracker_cfg.emb_bank_size),
+                        )
 
         mot_path = mot_root / f"{sequence}.txt"
         tracker_path = tracker_data / f"{sequence}.txt"

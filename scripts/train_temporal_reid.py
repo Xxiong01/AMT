@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import csv
 import json
 import random
@@ -32,6 +33,9 @@ from fishmambatrack.models.reid.registry import build_model  # noqa: E402
 
 
 def deterministic(seed: int) -> None:
+    # Required by PyTorch for deterministic CUDA matrix multiplication on
+    # CUDA >= 10.2.  Set it before any CUDA kernels are launched.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

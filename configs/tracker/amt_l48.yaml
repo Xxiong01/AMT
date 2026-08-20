@@ -9,27 +9,82 @@ tracker:
   det_high_th: 0.60
   det_nms_iou: 0.90
   fishiou_th: 0.25
-  w_fishiou: 1.0
+  fishiou_th_low: null
+  fishiou_th_low_min: null
+  fishiou_th_low_max: null
+  w_fishiou: 1.00
+  fishiou_axis_w: 0.00
   w_app: 1.25
   w_app_low: 0.50
-  w_app_stage3: 0.0
+  w_app_stage3: 0.00
+  w_app_low_min: null
+  w_app_low_max: null
+  w_axis: 0.00
+  axis_use_abs: true
+  w_motion: 0.00
+  motion_scale: 1.00
+  motion_gate: null
+  use_reid: true
   w_app_crowd: 0.45
   crowd_fishiou_th: 0.06
   crowd_count_th: 2
+  crowd_update_fishiou_th: null
+  history_depth_app_scale: false
+  history_depth_full: 8
+  history_depth_min_scale: 0.25
+  history_depth_app_scale_scope: all
+  geometry_confident_app_scale: true
   geometry_confidence_margin: 0.04
   geometry_confident_app_factor: 0.50
+  geometry_confidence_min_top: 0.00
+  geometry_confident_app_mode: binary
+  geometry_confidence_full_margin: 0.20
+  geometry_confident_app_scope: high
+  crowd_app_sim_gate: 0.00
+  app_sim_power: 1.00
+  app_sim_power_high: null
+  app_sim_power_low: null
+  stale_track_penalty: 0.00
+  stale_track_penalty_cap: 5
+  stage2_use_app: true
+  stage2_update_emb: false
+  stage3_update_emb: false
+  lt_update_emb: true
+  reactivation_apply_quality_gate: true
+  stage2_refine_app: false
+  stage2_refine_sim_th: 0.00
+  stage2_refine_fishiou_gate: 0.00
+  freeze_emb_in_crowd: true
   emb_update_sim_th: 0.475
   emb_update_fishiou_th: 0.40
   reid_long_th: 0.735
   reid_long_fishiou_gate: 0.08
+  emb_gain_high: 1.00
+  emb_gain_low: 1.00
   max_age: 30
+  active_match_max_age: null
   min_hits: 2
+  use_confirmed_cascade: true
+  drop_unconfirmed_on_miss: true
   min_hits_score_gate: 0.80
+  emb_bank_size: 1
+  emb_momentum: 1.00
   inertia: 0.90
+  cumulative_motion_prediction: false
+  gap_normalized_velocity: false
+  persistent_frame_crowd: false
+  emb_bank_consensus_alpha: 0.00
+  emb_bank_consensus_topk: 0
+  emb_update_sim_use_bank: true
+  emb_bank_diversity_th: 1.01
+  sim_relu: true
+  association_mode: cascade
   fishiou_params:
     alpha: 0.15
     beta: 0.30
     gamma: 0.25
+    mode: fishiou
+    adaptive_central: true
     ar_ref: 2.0
     ar_scale_min: 0.6
     ar_scale_max: 1.4
@@ -38,3 +93,4 @@ tracker:
     w3: 0.1
     w4: 0.2
     w5: 0.4
+    eps: 1.0e-9

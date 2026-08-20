@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import subprocess
 import sys
 from pathlib import Path
 from typing import Dict
@@ -10,8 +11,39 @@ from typing import Dict
 import numpy as np
 import yaml
 
+TRACKEVAL_COMMIT = "12c8791b303e0a0b50f753af204249e622d0281a"
+
+
+def _validate_tracker_name(value: str) -> str:
+    name = str(value).strip()
+    if not name or name in {".", ".."} or Path(name).name != name:
+        raise ValueError(f"Invalid tracker name: {value!r}")
+    return name
+
+
+def _verify_trackeval_revision(root: Path) -> None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root.resolve()), "rev-parse", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError(
+            "TrackEval must be a Git checkout so that the evaluation revision can "
+            "be verified. Follow REPRODUCIBILITY.md and check out the pinned commit."
+        ) from exc
+    revision = result.stdout.strip().lower()
+    if revision != TRACKEVAL_COMMIT:
+        raise RuntimeError(
+            f"TrackEval revision mismatch: expected {TRACKEVAL_COMMIT}, found "
+            f"{revision or '<empty>'}."
+        )
+
 
 def _load_trackeval(root: Path):
+    _verify_trackeval_revision(root)
     sys.path.insert(0, str(root.resolve()))
     if not hasattr(np, "float"):
         np.float = float  # type: ignore[attr-defined]
@@ -27,8 +59,13 @@ def _load_trackeval(root: Path):
     return trackeval
 
 
-def _summary(output_dir: Path) -> Dict[str, str]:
-    source = output_dir / "trackeval_raw" / "AMT" / "pedestrian_summary.txt"
+def _summary(output_dir: Path, tracker_name: str) -> Dict[str, str]:
+    source = (
+        output_dir
+        / "trackeval_raw"
+        / tracker_name
+        / "pedestrian_summary.txt"
+    )
     lines = [
         line.split()
         for line in source.read_text(encoding="utf-8").splitlines()
@@ -36,7 +73,7 @@ def _summary(output_dir: Path) -> Dict[str, str]:
     ]
     row = dict(zip(lines[0], lines[1]))
     return {
-        "method": "AMT",
+        "method": tracker_name,
         "HOTA": row.get("HOTA", ""),
         "DetA": row.get("DetA", ""),
         "AssA": row.get("AssA", ""),
@@ -49,8 +86,13 @@ def _summary(output_dir: Path) -> Dict[str, str]:
     }
 
 
-def _write_per_sequence(output_dir: Path) -> None:
-    source = output_dir / "trackeval_raw" / "AMT" / "pedestrian_detailed.csv"
+def _write_per_sequence(output_dir: Path, tracker_name: str) -> None:
+    source = (
+        output_dir
+        / "trackeval_raw"
+        / tracker_name
+        / "pedestrian_detailed.csv"
+    )
     with source.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     fields = (
@@ -94,8 +136,10 @@ def run_official_trackeval(
     output_dir: str | Path,
     dataset_config: str | Path,
     trackeval_root: str | Path,
+    tracker_name: str = "AMT",
 ) -> Dict[str, str]:
     output_dir = Path(output_dir).resolve()
+    tracker_name = _validate_tracker_name(tracker_name)
     dataset = yaml.safe_load(Path(dataset_config).read_text(encoding="utf-8"))
     trackeval = _load_trackeval(Path(trackeval_root))
     benchmark = str(dataset["benchmark"])
@@ -120,7 +164,7 @@ def run_official_trackeval(
             "GT_FOLDER": str(data_root / "gt" / "mot_challenge"),
             "TRACKERS_FOLDER": str(data_root / "trackers" / "mot_challenge"),
             "OUTPUT_FOLDER": str(output_dir / "trackeval_raw"),
-            "TRACKERS_TO_EVAL": ["AMT"],
+            "TRACKERS_TO_EVAL": [tracker_name],
             "CLASSES_TO_EVAL": ["pedestrian"],
             "BENCHMARK": benchmark,
             "SPLIT_TO_EVAL": split,
@@ -149,8 +193,8 @@ def run_official_trackeval(
         ],
     )
 
-    row = _summary(output_dir)
-    _write_per_sequence(output_dir)
+    row = _summary(output_dir, tracker_name)
+    _write_per_sequence(output_dir, tracker_name)
     with (output_dir / "official_trackeval_metrics.csv").open(
         "w", newline="", encoding="utf-8"
     ) as handle:

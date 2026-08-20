@@ -1,0 +1,22 @@
+name: amt-paper
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10.18
+  - pytorch=2.5.1
+  - torchvision=0.20.1
+  - pytorch-cuda=12.1
+  - numpy=1.26.4
+  - pillow=11.0.0
+  - pyyaml=6.0.2
+  - scipy=1.15.3
+  - pip=25.3
+  - pip:
+      - causal-conv1d==1.5.2
+      - mamba-ssm==2.2.5
+      - einops==0.8.1
+      - ninja==1.13.0
+      - packaging==25.0
+      - psutil==7.0.0

@@ -21,6 +21,7 @@ def main() -> None:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--trackeval-root", type=Path, required=True)
+    parser.add_argument("--embedding-cache-dir", type=Path)
     parser.add_argument("--seeds", type=int, nargs="+")
     args = parser.parse_args()
 
@@ -53,6 +54,10 @@ def main() -> None:
             ]
             if args.checkpoint is not None:
                 command.extend(["--checkpoint", str(args.checkpoint)])
+            if args.embedding_cache_dir is not None:
+                command.extend(
+                    ["--embedding-cache-dir", str(args.embedding_cache_dir)]
+                )
             subprocess.run(command, check=True)
 
 

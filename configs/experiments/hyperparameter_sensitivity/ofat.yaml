@@ -11,7 +11,8 @@ crowd_count_off_sentinel: 1
 one_factor_at_a_time:
   crowd_count_th: [1, 2, 3]
   emb_update_fishiou_th: [0.35, 0.40, 0.45]
-  emb_update_sim_th: [0.40, 0.475, 0.50]
-  reid_long_fishiou_gate: [0.03, 0.05, 0.08]
-  reid_long_th: [0.65, 0.70, 0.735]
+  emb_update_sim_th: [0.425, 0.475, 0.525]
+  reid_long_fishiou_gate: [0.05, 0.08, 0.11]
+  reid_long_th: [0.685, 0.735, 0.785]
   w_app: [1.0, 1.25, 1.5]
+  geometry_confidence_margin: [0.02, 0.04, 0.06]

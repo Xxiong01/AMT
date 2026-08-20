@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 from typing import Any
 
@@ -59,20 +60,36 @@ def _validate_main_config(
         "w_app_crowd": 0.45,
         "crowd_fishiou_th": 0.06,
         "crowd_count_th": 2,
+        "geometry_confident_app_scale": True,
         "geometry_confidence_margin": 0.04,
         "geometry_confident_app_factor": 0.50,
+        "geometry_confident_app_scope": "high",
+        "stage2_use_app": True,
+        "stage2_update_emb": False,
+        "stage3_update_emb": False,
+        "lt_update_emb": True,
+        "reactivation_apply_quality_gate": True,
+        "freeze_emb_in_crowd": True,
         "emb_update_sim_th": 0.475,
         "emb_update_fishiou_th": 0.40,
         "reid_long_th": 0.735,
         "reid_long_fishiou_gate": 0.08,
         "max_age": 30,
         "min_hits": 2,
+        "use_confirmed_cascade": True,
+        "drop_unconfirmed_on_miss": True,
         "min_hits_score_gate": 0.80,
+        "emb_bank_size": 1,
+        "emb_update_sim_use_bank": True,
+        "sim_relu": True,
+        "association_mode": "cascade",
         "inertia": 0.90,
         "fishiou_params": {
             "alpha": 0.15,
             "beta": 0.30,
             "gamma": 0.25,
+            "mode": "fishiou",
+            "adaptive_central": True,
             "ar_ref": 2.0,
             "ar_scale_min": 0.6,
             "ar_scale_max": 1.4,
@@ -81,14 +98,27 @@ def _validate_main_config(
             "w3": 0.1,
             "w4": 0.2,
             "w5": 0.4,
+            "eps": 1.0e-9,
         },
     }
-    _require_equal(
-        failures,
-        "frozen tracker parameters",
-        tracker_doc.get("tracker"),
-        expected_tracker,
-    )
+    actual_tracker = tracker_doc.get("tracker", {})
+    for key, expected in expected_tracker.items():
+        if key == "fishiou_params":
+            actual_fishiou = actual_tracker.get(key, {})
+            for fish_key, fish_expected in expected.items():
+                _require_equal(
+                    failures,
+                    f"frozen FishIoU parameter {fish_key}",
+                    actual_fishiou.get(fish_key),
+                    fish_expected,
+                )
+        else:
+            _require_equal(
+                failures,
+                f"frozen tracker parameter {key}",
+                actual_tracker.get(key),
+                expected,
+            )
     _require_equal(
         failures,
         "main temporal memory",
@@ -140,20 +170,21 @@ def _validate_main_semantics(failures: list[str]) -> None:
     required_online = (
         "def encode_current_frame_detections(",
         "features.unsqueeze(1)",
-        "track.temporal_history",
+        "histories: Dict[int, deque]",
+        "history.append",
         "_pad_earliest",
         "changed: List[int]",
     )
     required_tracker = (
-        "temporal_history: Deque[np.ndarray]",
-        "deque(maxlen=self.cfg.temporal_memory_length)",
-        'stage in {"stage1", "stage1_unconfirmed", "reactivation"}',
-        'stage="stage2"',
-        'stage="stage3"',
+        'stage="stage1_confirmed"',
+        'stage="stage1_unconfirmed"',
+        'stage="stage2_low"',
+        'stage="stage3_last_observation"',
         'stage="reactivation"',
-        "geometry < self.cfg.emb_update_fishiou_th",
-        "raw < self.cfg.emb_update_sim_th",
-        "if write and crowded",
+        'return False, "geometry_gate", None',
+        'return False, "appearance_gate", raw_sim',
+        "if update_emb and bool(crowd_block)",
+        "self.diagnostic_events",
     )
     for fragment in required_online:
         if fragment not in online:
@@ -184,7 +215,7 @@ def _validate_main_semantics(failures: list[str]) -> None:
         )
 
 
-def _validate_checkpoint(failures: list[str]) -> None:
+def _validate_checkpoint(failures: list[str], *, run_forward: bool) -> None:
     checkpoint_path = ROOT / "checkpoints" / "best.pt"
     if not checkpoint_path.is_file():
         failures.append("Missing checkpoints/best.pt")
@@ -218,6 +249,9 @@ def _validate_checkpoint(failures: list[str]) -> None:
         failures.append(
             "The release checkpoint must contain only model tensors and normalized metadata."
         )
+
+    if not run_forward:
+        return
 
     try:
         import sys
@@ -384,7 +418,7 @@ def _validate_experiment_semantics(
     tracker_source = (
         ROOT / "fishmambatrack" / "tracking" / "amt_tracker.py"
     ).read_text(encoding="utf-8")
-    if "self.cfg.crowd_count_th == 1" not in tracker_source:
+    if "if th <= 0.0 or k <= 1" not in tracker_source:
         failures.append("K_crowd=1 crowd-off sentinel is not implemented.")
 
     diagnostic_source = (
@@ -394,6 +428,40 @@ def _validate_experiment_semantics(
         failures.append(
             "History-write error rates do not expose a GT-evaluable denominator."
         )
+
+    ofat_path = (
+        ROOT
+        / "configs"
+        / "experiments"
+        / "hyperparameter_sensitivity"
+        / "ofat.yaml"
+    )
+    ofat = yaml_values.get(ofat_path, {}).get("one_factor_at_a_time")
+    expected_ofat = {
+        "crowd_count_th": [1, 2, 3],
+        "emb_update_fishiou_th": [0.35, 0.40, 0.45],
+        "emb_update_sim_th": [0.425, 0.475, 0.525],
+        "reid_long_fishiou_gate": [0.05, 0.08, 0.11],
+        "reid_long_th": [0.685, 0.735, 0.785],
+        "w_app": [1.0, 1.25, 1.5],
+        "geometry_confidence_margin": [0.02, 0.04, 0.06],
+    }
+    _require_equal(failures, "paper OFAT grid", ofat, expected_ofat)
+
+    geometry_point_path = (
+        ROOT
+        / "configs"
+        / "experiments"
+        / "operating_points"
+        / "P5_geometry_margin.yaml"
+    )
+    geometry_point = yaml_values.get(geometry_point_path, {})
+    _require_equal(
+        failures,
+        "geometry-margin operating point",
+        geometry_point.get("tracker_overrides"),
+        {"geometry_confidence_margin": 0.06},
+    )
 
     cache_source = (ROOT / "scripts" / "build_embedding_cache.py").read_text(
         encoding="utf-8"
@@ -412,6 +480,7 @@ def _validate_trackeval(failures: list[str]) -> None:
         encoding="utf-8"
     )
     for fragment in (
+        'TRACKEVAL_COMMIT = "12c8791b303e0a0b50f753af204249e622d0281a"',
         '"HOTA"',
         '"CLEAR"',
         '"Identity"',
@@ -423,18 +492,30 @@ def _validate_trackeval(failures: list[str]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--static-only",
+        action="store_true",
+        help=(
+            "Validate syntax, configuration, checkpoint metadata, experiment "
+            "declarations, and evaluator policy without importing the Mamba CUDA "
+            "extension or running checkpoint forward passes."
+        ),
+    )
+    args = parser.parse_args()
     failures: list[str] = []
     yaml_values = _validate_python_and_yaml(failures)
     _validate_main_config(failures, yaml_values)
     _validate_main_semantics(failures)
-    _validate_checkpoint(failures)
+    _validate_checkpoint(failures, run_forward=not args.static_only)
     _validate_manifest(failures, yaml_values)
     _validate_experiment_semantics(failures, yaml_values)
     _validate_trackeval(failures)
     if failures:
         raise SystemExit("\n".join(failures))
+    scope = "static release" if args.static_only else "full release"
     print(
-        "PASS: AMT main method, seed-0 checkpoint, experiment declarations, "
+        f"PASS: AMT {scope}, seed-0 checkpoint, experiment declarations, "
         "and TrackEval policy are consistent."
     )
 
